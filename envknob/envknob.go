@@ -417,6 +417,17 @@ func CanSSHD() bool { return !Bool("TS_DISABLE_SSH_SERVER") }
 // If disabled, Taildrop won't receive files regardless of user & server config.
 func CanTaildrop() bool { return !Bool("TS_DISABLE_TAILDROP") }
 
+// MaxQueues reports the maximum number of TUN read queues and per-address
+// family UDP sockets to open, from $TS_MAX_QUEUES, further capped at
+// GOMAXPROCS. Unset or less than one means one.
+func MaxQueues() int {
+	n, _ := LookupInt("TS_MAX_QUEUES")
+	if n < 1 {
+		return 1
+	}
+	return min(n, runtime.GOMAXPROCS(0))
+}
+
 // SSHPolicyFile returns the path, if any, to the SSHPolicy JSON file for development.
 func SSHPolicyFile() string { return String("TS_DEBUG_SSH_POLICY_FILE") }
 

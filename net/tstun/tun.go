@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/tailscale/wireguard-go/tun"
+	"tailscale.com/envknob"
 	"tailscale.com/feature"
 	"tailscale.com/feature/buildfeatures"
 	"tailscale.com/types/logger"
@@ -62,7 +63,7 @@ func New(logf logger.Logf, tunName string) (tun.Device, string, error) {
 		// the first time and we're on Linux, try a desperate
 		// "modprobe tun" to load the tun module and try again.
 		for try := range 2 {
-			dev, err = tun.CreateTUN(tunName, int(DefaultTUNMTU()))
+			dev, err = tun.CreateTUN(tunName, int(DefaultTUNMTU()), tun.WithQueues(envknob.MaxQueues()))
 			if err == nil || !modprobeTunHook.IsSet() {
 				if try > 0 {
 					logf("created TUN device %q after doing `modprobe tun`", tunName)
