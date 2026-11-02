@@ -233,26 +233,37 @@ func (c *client) enqueueAddressAssignment(addrs *addrs) error {
 	}
 }
 
-func (c *client) flowCreated(transit netip.Addr) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	entry, ok := c.assignments.byTransitIP[transit]
-	if !ok {
-		return
-	}
-	entry.activeFlowCount++
+// ClientFlowRef identifies the address assignment that a client flow was
+// counted against. It is returned by [Conn25.ClientFlowCreated] and must be
+// handed back to [Conn25.ClientFlowRemoved] when that flow goes away.
+type ClientFlowRef struct {
+	as *addrs
 }
 
-func (c *client) flowRemoved(transit netip.Addr) {
+func (c *client) flowCreated(transit netip.Addr) ClientFlowRef {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	entry, ok := c.assignments.byTransitIP[transit]
 	if !ok {
+		return ClientFlowRef{}
+	}
+	entry.activeFlowCount++
+	return ClientFlowRef{as: entry}
+}
+
+func (c *client) flowRemoved(ref ClientFlowRef) {
+	if ref.as == nil {
 		return
 	}
-	entry.activeFlowCount--
-	if entry.activeFlowCount == 0 {
-		entry.zeroFlowTime = c.assignments.clock.Now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if ref.as.activeFlowCount <= 0 {
+		c.logf("flow removed for transit %v with no active flows", ref.as.connectorAddr.transit)
+		return
+	}
+	ref.as.activeFlowCount--
+	if ref.as.activeFlowCount == 0 {
+		ref.as.zeroFlowTime = c.assignments.clock.Now()
 	}
 }
 

@@ -48,13 +48,16 @@ type Conn25Datapath interface {
 	// non-app-connector traffic.
 	ConnectorRealIPForTransitIPConnection(srcIP netip.Addr, transitIP netip.Addr) (netip.Addr, error)
 
-	// ClientFlowCreated is called after a client-side flow for transitIP has
-	// been installed in the client flow table.
-	ClientFlowCreated(transitIP netip.Addr)
-	// ClientFlowRemoved is called after such a flow is removed. For each
-	// flow installed in the client flow table, ClientFlowCreated is called
-	// before any ClientFlowRemoved that fires for it.
-	ClientFlowRemoved(transitIP netip.Addr)
+	// ClientFlowCreated is called before a client-side flow for transitIP is
+	// installed in the client flow table. It returns a reference to the address
+	// assignment the flow was counted against, which the caller must pass to
+	// ClientFlowRemoved when that flow is removed.
+	ClientFlowCreated(transitIP netip.Addr) ClientFlowRef
+	// ClientFlowRemoved is called after such a flow is removed, with the
+	// reference ClientFlowCreated returned for it. For each flow installed in
+	// the client flow table, ClientFlowCreated is called before any
+	// ClientFlowRemoved that fires for it.
+	ClientFlowRemoved(ref ClientFlowRef)
 }
 
 // datapathHandler handles packets from the datapath,
@@ -267,14 +270,16 @@ func (dh *datapathHandler) HandlePacketFromTunDevice(p *packet.Parsed, tun *tstu
 
 	// Notify Conn25 that a flow for transitIP is being established before
 	// installing it in the flow table. This guarantees that ClientFlowCreated
-	// for this flow precedes any ClientFlowRemoved that fires for it.
-	dh.conn25.ClientFlowCreated(transitIP)
+	// for this flow precedes any ClientFlowRemoved that fires for it. The
+	// returned reference ties the removal to the assignment counted here, which
+	// may no longer own transitIP by the time the flow goes away.
+	flowRef := dh.conn25.ClientFlowCreated(transitIP)
 
 	dh.clientFlowTable.NewFlow(FlowData{
 		FromTun: outgoing,
 		FromWG:  incoming,
 		OnRemove: func() {
-			dh.conn25.ClientFlowRemoved(transitIP)
+			dh.conn25.ClientFlowRemoved(flowRef)
 		},
 	})
 	outgoing.Action(p)

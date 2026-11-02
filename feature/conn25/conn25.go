@@ -325,15 +325,17 @@ func (c *Conn25) ClientTransitIPForMagicIP(m netip.Addr) (netip.Addr, error) {
 // ClientFlowCreated implements [Conn25Datapath].
 // The datapath notifies Conn25 that a flow with transitIP has been created so
 // that Conn25 can prevent that transit IP and associated addresses from being
-// removed from its state and returned to their pools.
-func (c *Conn25) ClientFlowCreated(transitIP netip.Addr) {
-	c.client.flowCreated(transitIP)
+// removed from its state and returned to their pools. The returned
+// [ClientFlowRef] identifies the address assignment the flow was counted
+// against, and must be passed to [Conn25.ClientFlowRemoved] for that flow.
+func (c *Conn25) ClientFlowCreated(transitIP netip.Addr) ClientFlowRef {
+	return c.client.flowCreated(transitIP)
 }
 
 // ClientFlowRemoved implements [Conn25Datapath].
 // See [Conn25.ClientFlowCreated].
-func (c *Conn25) ClientFlowRemoved(transitIP netip.Addr) {
-	c.client.flowRemoved(transitIP)
+func (c *Conn25) ClientFlowRemoved(ref ClientFlowRef) {
+	c.client.flowRemoved(ref)
 }
 
 // ConnectorRealIPForTransitIPConnection implements [Conn25Datapath].
